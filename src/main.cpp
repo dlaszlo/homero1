@@ -20,11 +20,12 @@ boolean error = false;
 Adafruit_BME280 bme280;
 OneWire oneWire(D1);
 DallasTemperature ds18b20(&oneWire);
+DeviceAddress deviceAddress;
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
-#define TEMPERATURE_PRECISION 10
+#define TEMPERATURE_PRECISION 12
 
 #include "settings.h"
 //
@@ -81,11 +82,29 @@ void setupDS18B20()
         if (!error)
         {
                 Serial.println(F("A DS18B20 inicializálás."));
+
+                // byte i;
+                // byte addr[8];
+                // if (oneWire.search(addr)) {
+                //         Serial.print(" ROM =");
+                //         for (i = 0; i < 8; i++) {
+                //                 Serial.write(' ');
+                //                 Serial.print(addr[i], HEX);
+                //         }
+                //         oneWire.reset_search();
+                // }
+                // Serial.println();
+
                 ds18b20.begin();
                 if (ds18b20.getDeviceCount() == 0)
                 {
                         Serial.println(F("A DS18B20 szenzor nem található."));
                         error = true;
+                }
+                else
+                {
+                        ds18b20.getAddress(deviceAddress, 0);
+                        ds18b20.setResolution(deviceAddress, TEMPERATURE_PRECISION);
                 }
         }
 }
@@ -158,7 +177,7 @@ void publish(char* payload, int length)
         {
                 Serial.print(F("MQTT: adatok küldése: "));
                 Serial.print(mqtt_topic);
-                Serial.print(" = ");
+                Serial.print(F(" = "));
                 Serial.println(payload);
                 if (mqttClient.publish(mqtt_topic, payload))
                 {
@@ -196,6 +215,7 @@ float readDS18B20Temperature()
 
 void readSensorValues()
 {
+        Serial.println(F("Mérés."));
         temperature1 = readDS18B20Temperature();
         temperature2 = bme280.readTemperature();
         pressure = bme280.readPressure() / 100.0F;
@@ -223,7 +243,6 @@ void sendValues()
 void deepSleep()
 {
         Serial.println(F("Alvás."));
-        Serial.println(F("======================================="));
         Serial.println();
 
         mqttClient.disconnect();
@@ -243,10 +262,6 @@ void setup()
         setupSerial();
         setupBME280();
         setupDS18B20();
-        setupWifi();
-        setupMqtt();
-
-        Serial.println(F("======================================="));
 
         if (error)
         {
@@ -255,8 +270,23 @@ void setup()
         else
         {
                 readSensorValues();
-                sendValues();
+                delay(500);
+                readSensorValues();
+                delay(500);
+                readSensorValues();
+
+                setupWifi();
+                setupMqtt();
+                if (error)
+                {
+                        Serial.println(F("Hiba történt inicializálás közben."));
+                }
+                else
+                {
+                        sendValues();
+                }
         }
+
         deepSleep();
 }
 
